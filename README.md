@@ -8,7 +8,7 @@ O placar final entra em um ranking de dez posições com iniciais de três letra
 
 ## Como jogar
 
-Baixe os dois arquivos, deixe-os **na mesma pasta** e abra o `orbita-do-saber.html` no navegador. Não precisa instalar nada, nem servidor, nem internet.
+Baixe o `orbita-do-saber.html`, o `perguntas.js` e o `ranking.js`, deixe-os **na mesma pasta** e abra o `orbita-do-saber.html` no navegador. Não precisa instalar nada, nem internet. Assim, cada máquina guarda o próprio ranking; para gravar o ranking no arquivo `ranking.js` e compartilhá-lo, rode o `servidor.js` (veja [O ranking](#o-ranking)).
 
 ### Controles
 
@@ -87,8 +87,11 @@ Música chiptune gerada em tempo real, com um tema para cada momento: combate, p
 ## Estrutura dos arquivos
 
 ```
-orbita-do-saber.html   → o jogo inteiro (motor, interface, ranking)
+orbita-do-saber.html   → o jogo inteiro (motor, interface, trilha sonora)
 perguntas.js           → o banco de questões
+ranking.js             → as 10 melhores partidas (lido pelo jogo, gravado pelo servidor.js)
+servidor.js            → servidor local opcional que grava o ranking.js
+.github/               → workflow que cria a tag e o Release a cada push na main
 ```
 
 A separação é intencional: um professor pode editar o banco sem nunca abrir o código do jogo, e o histórico de versões mostra "adicionadas 40 questões de química" em vez de um diff gigante.
@@ -141,43 +144,25 @@ Se o `perguntas.js` estiver faltando ou vazio, o jogo avisa na faixa e desabilit
 
 ## O ranking
 
-Guarda as dez melhores partidas com iniciais, pontos, onda alcançada, precisão de tiro e aproveitamento nas provas.
+Guarda as dez melhores partidas com iniciais, pontos, onda alcançada, precisão de tiro e aproveitamento nas provas, no arquivo **`ranking.js`**. O jogo o lê por `<script>`, exatamente como lê o `perguntas.js`.
 
-O código de persistência está isolado em duas funções, no topo do script do jogo:
+Um navegador não consegue gravar em arquivos do seu computador, então quem escreve no `ranking.js` é o `servidor.js`, um servidor Node.js pequeno e sem dependências:
 
-```js
-const ranking = {
-  async carregar(){ /* devolve um array de placares */ },
-  async gravar(lista){ /* persiste o array */ }
-};
+```
+node servidor.js
 ```
 
-Por padrão ele usa o armazenamento do navegador, o que significa que **cada máquina guarda o próprio ranking**. Para uma tabela única da turma, hospede o jogo e troque o corpo das duas funções por chamadas à sua API:
+Abra `http://localhost:8080` e jogue. A cada placar novo o servidor mescla com os existentes, mantém os dez melhores e regrava o `ranking.js`. Como o arquivo fica no repositório, o ranking pode ser commitado como qualquer outro arquivo. Há duas variações úteis: `PORT=3000 node servidor.js` para outra porta e `HOST=0.0.0.0 node servidor.js` para a turma acessar pela rede (no PowerShell: `$env:PORT=3000; node servidor.js`).
 
-```js
-const ranking = {
-  async carregar(){
-    const r = await fetch("/api/ranking");
-    return await r.json();
-  },
-  async gravar(lista){
-    await fetch("/api/ranking", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(lista)
-    });
-    return true;
-  }
-};
-```
+Sem o servidor, ou seja, abrindo o HTML direto ou numa hospedagem estática como o GitHub Pages, o jogo continua funcionando: o `ranking.js` é lido normalmente, mas os placares novos ficam guardados no navegador de quem jogou, e a tela do ranking avisa isso.
 
-Nenhuma outra parte do jogo precisa ser alterada.
+Sobre segurança: o servidor entrega só arquivos soltos da pasta do jogo, aceita gravação apenas de `application/json` vindo da própria origem, valida e limpa cada item (iniciais, pontos, onda) antes de gravar e escuta só em `localhost` por padrão.
 
 ---
 
 ## Detalhes técnicos
 
-- **Sem dependências.** Nenhuma biblioteca, nenhum build, nenhum `npm install`.
+- **Sem dependências.** Nenhuma biblioteca, nenhum build, nenhum `npm install`. O `servidor.js`, opcional, precisa apenas do Node.js 14 ou mais novo.
 - **Canvas 2D** para o jogo, HTML e CSS para os menus e o placar.
 - **Sprites em pixel art** desenhados por matrizes de texto no próprio código, sem arquivos de imagem.
 - **Áudio via Web Audio API**, gerado em tempo real — efeitos e trilha sonora, sem arquivos de som.
@@ -198,19 +183,23 @@ Nenhuma outra parte do jogo precisa ser alterada.
 
 ## Versões
 
-O projeto segue [versionamento semântico](https://semver.org/lang/pt-BR/) (`MAJOR.MINOR.PATCH`) e cada versão é marcada com uma tag no GitHub, na página de *Releases*. O número da versão atual aparece no canto do letreiro do jogo e fica na constante `VERSAO`.
+O projeto segue [versionamento semântico](https://semver.org/lang/pt-BR/) (`MAJOR.MINOR.PATCH`), e o número da versão aparece no canto do letreiro do jogo. O workflow `.github/workflows/versao.yml` cuida disso sozinho: a cada push na `main` ele
+
+1. soma 1 ao patch da última tag (`v1.1.0` vira `v1.1.1`);
+2. grava o novo número na constante `VERSAO` do jogo, num commit do bot com `[skip ci]`;
+3. cria a tag `vX.Y.Z` e publica um Release no GitHub, com as notas geradas a partir dos commits.
+
+Pushes que só mudam o `ranking.js` ou arquivos `.md` não geram versão.
+
+Para um salto de minor ou major, edite `VERSAO` no jogo para o número desejado (por exemplo `"1.2.0"`) e faça o push. Quando a constante é maior que a última tag, o workflow publica exatamente esse número.
+
+Como o bot commita na `main`, rode `git pull` antes do próximo push. Se a `main` tiver proteção de branch exigindo pull request, o bot não conseguirá gravar: libere o `github-actions[bot]` na regra.
 
 | Versão | O que mudou |
 |---|---|
 | v1.0.0 | Primeira versão jogável: combate, provas com 250 questões, reforços e ranking |
 | v1.1.0 | Trilha sonora chiptune, três novos reforços (tiro perfurante, bomba, pontos em dobro) e fases especiais a cada cinco ondas (chefe e chuva de meteoros) |
-
-Para lançar uma versão nova: atualize `VERSAO` no jogo e a tabela acima, faça o commit e crie a tag.
-
-```
-git tag -a v1.2.0 -m "v1.2.0 - descrição curta"
-git push origin v1.2.0
-```
+| v1.1.1 em diante | Geradas pelo workflow; a lista completa está na página de Releases |
 
 ---
 

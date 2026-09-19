@@ -1,0 +1,53 @@
+name: Versão e Release
+
+# A cada push na main: soma 1 ao patch, grava o número no jogo, cria a tag vX.Y.Z
+# e publica um Release com as notas geradas a partir dos commits.
+# Para um minor/major, suba a constante VERSAO no jogo (ex.: "1.2.0") antes do push.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "ranking.js"   # o ranking muda a cada partida e não deve gerar versão
+      - "**.md"        # documentação também não
+
+permissions:
+  contents: write
+
+# um push por vez, para duas execuções nunca disputarem o mesmo número
+concurrency:
+  group: versao-release
+  cancel-in-progress: false
+
+jobs:
+  versionar:
+    runs-on: ubuntu-latest
+    # o commit do próprio bot leva [skip ci]; esta guarda é uma segunda proteção
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    steps:
+      - name: Baixar o repositório com todas as tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calcular a próxima versão
+        id: v
+        run: bash .github/scripts/versionar.sh
+
+      - name: Gravar a versão no jogo
+        if: steps.v.outputs.alterou == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add orbita-do-saber.html
+          git commit -m "chore: versão ${{ steps.v.outputs.versao }} [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Criar a tag e o Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.v.outputs.versao }}" \
+            --target "$(git rev-parse HEAD)" \
+            --title "v${{ steps.v.outputs.versao }}" \
+            --generate-notes
