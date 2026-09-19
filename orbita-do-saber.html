@@ -235,7 +235,6 @@
 </div>
 
 <script src="perguntas.js" charset="utf-8"></script>
-<script src="ranking.js" charset="utf-8"></script>
 <script>
 /* =====================================================================
    1. BANCO DE QUESTÕES
@@ -264,15 +263,12 @@ function montarFila(){
 
 /* =====================================================================
    2. RANKING
-   O ranking fica no arquivo ranking.js, lido por <script> como o perguntas.js.
-   Um navegador não escreve em arquivos do disco, então quem regrava o
-   ranking.js é o servidor.js (node servidor.js), pela rota api/ranking.
-   Se o jogo for aberto sem o servidor, o ranking.js vale como leitura e os
-   placares novos ficam guardados no próprio navegador.
-   carregar() devolve um array de {n, s, w, a, q, d}; gravar(lista) persiste.
+   Troque estas duas funções para gravar no servidor da escola:
+   carregar() devolve um array de {n, s, w, a, q, d} ordenado ou não;
+   gravar(lista) persiste esse array.
    ===================================================================== */
 const RANK_KEY = "orbita_ranking_v1";
-const rankLocal = {
+const ranking = {
   async carregar(){
     try{
       if(window.storage){
@@ -296,46 +292,6 @@ const rankLocal = {
       if(window.localStorage){ localStorage.setItem(RANK_KEY, JSON.stringify(lista)); return true; }
     }catch(e){}
     return false;
-  }
-};
-
-const RANK_API = "api/ranking";
-const rankChave = r => [r.n, r.s, r.w, r.a, r.q, r.d].join("|");
-/* Junta listas sem repetir, ordena por pontos e fica com as 10 melhores */
-function rankMesclar(...listas){
-  const vistos = new Set(), todos = [];
-  listas.forEach(l => (l || []).forEach(r => {
-    if(!r || typeof r.s !== "number") return;
-    const k = rankChave(r);
-    if(!vistos.has(k)){ vistos.add(k); todos.push(r); }
-  }));
-  return todos.sort((x, y) => y.s - x.s).slice(0, 10);
-}
-
-const ranking = {
-  servidor:false,      // true quando o jogo está rodando pelo servidor.js
-  async carregar(){
-    try{
-      const r = await fetch(RANK_API, { cache:"no-store" });
-      if(r.ok){
-        const lista = await r.json();
-        this.servidor = true;
-        return rankMesclar(lista);
-      }
-    }catch(e){}
-    this.servidor = false;
-    const doArquivo = (typeof RANKING !== "undefined" && Array.isArray(RANKING)) ? RANKING : [];
-    return rankMesclar(doArquivo, await rankLocal.carregar());
-  },
-  async gravar(lista){
-    try{
-      const r = await fetch(RANK_API, {
-        method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(lista)
-      });
-      if(r.ok){ this.servidor = true; return true; }
-    }catch(e){}
-    this.servidor = false;
-    return rankLocal.gravar(lista);
   }
 };
 
@@ -779,9 +735,7 @@ async function gravarPlacar(){
   listaRank = listaRank.slice(0,10);
   const ok = await ranking.gravar(listaRank);
   el("lyName").classList.remove("on");
-  mostrarRank(item, !ok
-    ? "Não foi possível salvar o ranking neste navegador."
-    : (ranking.servidor ? "" : "Placar guardado só neste navegador. Para gravar no ranking.js, abra o jogo com: node servidor.js"));
+  mostrarRank(item, ok ? "" : "Não foi possível salvar o ranking neste navegador.");
 }
 
 async function mostrarRank(destaque, nota = ""){

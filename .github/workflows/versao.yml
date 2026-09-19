@@ -7,8 +7,7 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - "ranking.js"   # o ranking muda a cada partida e não deve gerar versão
-      - "**.md"        # documentação também não
+      - "**.md"        # documentação não gera versão
 
 permissions:
   contents: write
