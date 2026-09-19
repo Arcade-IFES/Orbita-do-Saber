@@ -32,6 +32,13 @@
     color:var(--amber); text-shadow:0 0 12px rgba(255,194,71,.5), 3px 3px 0 #7a2bb8;
   }
   .marquee p{margin:0; font-size:12.5px; color:var(--dim)}
+  .marquee .tools{display:flex; align-items:center; gap:10px}
+  .ver{font-family:"Press Start 2P",monospace; font-size:8.5px; color:var(--dim)}
+  .mute{
+    font-family:"Press Start 2P",monospace; font-size:8.5px; padding:7px 9px; border-radius:6px;
+    border:2px solid var(--grid); background:transparent; color:var(--dim); cursor:pointer;
+  }
+  .mute.on{color:var(--cyan); border-color:var(--cyan)}
 
   .screen{position:relative; background:#0b0524; border-radius:12px; overflow:hidden;
     box-shadow:0 0 0 4px #0a0322, 0 0 0 6px #6a3fd6}
@@ -78,6 +85,7 @@
     background:var(--dim); box-shadow:0 4px 0 #5b4795;
   }
   .pad .fire{flex:1.5; background:var(--magenta); box-shadow:0 4px 0 #9c1f6c}
+  .pad .bomb{background:var(--amber); box-shadow:0 4px 0 #b57614}
   .pad button:active{transform:translateY(3px); box-shadow:0 1px 0 #5b4795}
   @media (max-width:820px), (pointer:coarse){ .pad{display:flex} }
 
@@ -143,6 +151,10 @@
   <div class="marquee">
     <h1>Órbita do Saber</h1>
     <p>Sobreviva às ondas. O ranking só guarda quem chegar longe.</p>
+    <div class="tools">
+      <span class="ver" id="ver"></span>
+      <button class="mute" id="btnMute" type="button" tabindex="-1">♪ SOM</button>
+    </div>
   </div>
 
   <div class="screen">
@@ -164,6 +176,7 @@
 
     <div class="pad">
       <button id="btnL">◀</button>
+      <button class="bomb" id="btnB">BOMBA</button>
       <button class="fire" id="btnF">ATIRAR</button>
       <button id="btnR">▶</button>
     </div>
@@ -173,14 +186,15 @@
       <div class="rules">
         <div><b>alvo</b><span>Derrube a frota antes que ela pouse. A cada onda eles descem mais rápido, atiram mais e alguns saem em rasante.</span></div>
         <div><b>multi</b><span>Dez abates sem levar dano sobem o multiplicador, até x8. Um único tiro recebido zera tudo.</span></div>
-        <div><b>saber</b><span>Toda onda limpa abre um campo de asteroides com uma pergunta e 20 segundos no relógio. Acertar rende pontos e um reforço: escudo, tiro triplo, cadência rápida ou nave extra, nessa ordem.</span></div>
+        <div><b>saber</b><span>Toda onda limpa abre um campo de asteroides com uma pergunta e 20 segundos no relógio. Acertar rende pontos e um reforço, em ordem fixa: escudo, tiro triplo, cadência rápida, nave extra, tiro perfurante, bomba, pontos em dobro e outra nave extra.</span></div>
+        <div><b>chefe</b><span>A cada <span id="espN">5</span> ondas entra uma fase especial: um chefe com barra de vida ou uma chuva de meteoros.</span></div>
         <div><b>rank</b><span>Três naves, sem continues, mesma dificuldade para todos. Só o placar final vale.</span></div>
       </div>
       <div class="row">
         <button class="btn" id="btnStart">INSERIR FICHA</button>
         <button class="btn ghost" id="btnSeeRank">VER RANKING</button>
       </div>
-      <div class="keys"><kbd>←</kbd> <kbd>→</kbd> movem &nbsp;·&nbsp; <kbd>espaço</kbd> atira &nbsp;·&nbsp; <kbd>P</kbd> pausa</div>
+      <div class="keys"><kbd>←</kbd> <kbd>→</kbd> movem &nbsp;·&nbsp; <kbd>espaço</kbd> atira &nbsp;·&nbsp; <kbd>B</kbd> bomba &nbsp;·&nbsp; <kbd>P</kbd> pausa &nbsp;·&nbsp; <kbd>M</kbd> som</div>
     </div>
 
     <div class="layer" id="lyPause">
@@ -290,6 +304,10 @@ const W = cv.width, H = cv.height;
 const LINHA = H - 74;
 const el = id => document.getElementById(id);
 
+const VERSAO = "1.1.0";        // acompanha a tag do GitHub (vX.Y.Z)
+const ESPECIAL_A_CADA = 5;     // a cada quantas ondas entra uma fase especial
+const VOL_MUSICA = .4;         // volume da trilha, de 0 a 1
+
 let estado = "menu";
 let g = null, ultimo = 0, listaRank = [];
 
@@ -303,6 +321,19 @@ const SPR = {
   disco:["....XXXXXX....","..XXXXXXXXXX..",".XXXXXXXXXXXX.",
          "XX.XX.XX.XX.XX","XXXXXXXXXXXXXX","..XXX....XXX.."]
 };
+const SPR_CHEFE = [
+  "........XXXXXXXX........",
+  "......XXXXXXXXXXXX......",
+  "..XX.XXXXXXXXXXXXXX.XX..",
+  ".XXXXXXXXXXXXXXXXXXXXXX.",
+  "XXXXXX..XXXXXXXX..XXXXXX",
+  "XXXXXX..XXXXXXXX..XXXXXX",
+  "XXXXXXXXXXXXXXXXXXXXXXXX",
+  "XX.XXXXX.XX..XX.XXXXX.XX",
+  "X..XXX...XX..XX...XXX..X",
+  "...XX....XX..XX....XX...",
+  "...X......X..X......X..."
+];
 const TIPOS = {
   peao:    { spr:"peao",    cor:"#3ff0ff", pontos:25, hp:1, cel:3 },
   veloz:   { spr:"veloz",   cor:"#b6ff3d", pontos:40, hp:1, cel:3 },
@@ -316,17 +347,171 @@ function sprite(m, x, y, cel, cor){
       if(m[r][c] === "X") ctx.fillRect(x + c*cel, y + r*cel, cel + .5, cel + .5);
 }
 
-let ac = null;
+/* ---------------------------------------------------------------------
+   ÁUDIO: efeitos (bip) e trilha sonora chiptune, tudo sintetizado em tempo
+   real pela Web Audio API. Nenhum arquivo de som.
+   --------------------------------------------------------------------- */
+let ac = null, saida = null, gMus = null, ruido = null;
+let mudo = false;
+try{ mudo = localStorage.getItem("orbita_mudo") === "1"; }catch(e){}
+
+function audio(){
+  if(!ac){
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    saida = ac.createGain(); saida.gain.value = mudo ? 0 : 1; saida.connect(ac.destination);
+    gMus = ac.createGain(); gMus.gain.value = VOL_MUSICA; gMus.connect(saida);
+    ruido = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+    const d = ruido.getChannelData(0);
+    for(let i = 0; i < d.length; i++) d[i] = Math.random()*2 - 1;
+  }
+  if(ac.state === "suspended") ac.resume();
+  return ac;
+}
+function audioPausa(pausar){
+  if(!ac) return;
+  try{ pausar ? ac.suspend() : ac.resume(); }catch(e){}
+}
+function alternarSom(){
+  mudo = !mudo;
+  if(saida) saida.gain.value = mudo ? 0 : 1;
+  try{ localStorage.setItem("orbita_mudo", mudo ? "1" : "0"); }catch(e){}
+  rotuloSom();
+}
+function rotuloSom(){
+  el("btnMute").textContent = mudo ? "♪ SOM: OFF" : "♪ SOM: ON";
+  el("btnMute").classList.toggle("on", !mudo);
+}
+
 function bip(f, d = .07, t = "square", v = .04){
   try{
-    if(!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ac.createOscillator(), gn = ac.createGain();
+    const a = audio();
+    const o = a.createOscillator(), gn = a.createGain();
     o.type = t; o.frequency.value = f;
-    gn.gain.setValueAtTime(v, ac.currentTime);
-    gn.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + d);
-    o.connect(gn).connect(ac.destination); o.start(); o.stop(ac.currentTime + d);
+    gn.gain.setValueAtTime(v, a.currentTime);
+    gn.gain.exponentialRampToValueAtTime(.0001, a.currentTime + d);
+    o.connect(gn).connect(saida); o.start(); o.stop(a.currentTime + d);
   }catch(e){}
 }
+
+/* Instrumentos da trilha */
+const mf = n => 440*Math.pow(2, (n - 69)/12);           // nota MIDI -> Hz
+function nota(n, t, dur, tipo, vol){
+  if(mudo) return;
+  const o = ac.createOscillator(), gn = ac.createGain();
+  o.type = tipo; o.frequency.setValueAtTime(mf(n), t);
+  gn.gain.setValueAtTime(.0001, t);
+  gn.gain.linearRampToValueAtTime(vol, t + .008);
+  gn.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(gn).connect(gMus); o.start(t); o.stop(t + dur + .02);
+}
+function bumbo(t){
+  if(mudo) return;
+  const o = ac.createOscillator(), gn = ac.createGain();
+  o.type = "sine";
+  o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(42, t + .12);
+  gn.gain.setValueAtTime(.16, t); gn.gain.exponentialRampToValueAtTime(.0001, t + .16);
+  o.connect(gn).connect(gMus); o.start(t); o.stop(t + .18);
+}
+function chiado(t, dur, freq, vol, tipo = "highpass"){
+  if(mudo) return;
+  const src = ac.createBufferSource(), fl = ac.createBiquadFilter(), gn = ac.createGain();
+  src.buffer = ruido; fl.type = tipo; fl.frequency.value = freq;
+  gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  src.connect(fl).connect(gn).connect(gMus); src.start(t, Math.random()*.4, dur + .02);
+}
+const chimbal = t => chiado(t, .04, 7000, .05);
+const caixa   = t => chiado(t, .11, 1800, .09, "bandpass");
+
+/* Temas. Cada função recebe o passo (semicolcheia) atual, o instante em que
+   ele toca e a duração do passo. Compasso = 16 passos. */
+const T_COMBATE = {
+  baixo:[45,41,48,43,45,41,43,40],
+  acorde:[[57,60,64],[53,57,60],[60,64,67],[55,59,62],[57,60,64],[53,57,60],[55,59,62],[52,55,59]],
+  lead:[
+    [69,72,76,72,74,72,69,67], [65,69,72,69,77,76,72,69],
+    [72,76,79,76,74,72,67,72], [71,74,79,74,76,74,71,67],
+    [76,0,76,72,74,0,72,69],   [77,0,77,72,76,0,72,69],
+    [74,0,74,71,72,0,71,67],   [71,74,76,74,71,67,71,0]
+  ]
+};
+function mCombate(s, t, d, f){
+  const bar = (s >> 4) & 7, k = s & 15, tr = f.tr || 0;
+  if(k % 2 === 0) nota(T_COMBATE.baixo[bar] + tr + ((k >> 1) % 2 ? 12 : 0), t, d*1.7, "triangle", .1);
+  nota(T_COMBATE.acorde[bar][k % 3] + 12 + tr, t, d*.85, "square", .012);
+  if(k % 2 === 0){ const n = T_COMBATE.lead[bar][k >> 1]; if(n) nota(n + tr, t, d*1.9, "square", .026); }
+  if(k % 4 === 0) bumbo(t);
+  if(k === 4 || k === 12) caixa(t);
+  if(k % 4 === 2) chimbal(t);
+}
+
+const T_PROVA = {
+  baixo:[38,34,43,45],
+  acorde:[[62,65,69],[58,62,65],[55,58,62],[57,61,64]],
+  mel:[[74,0,77,0],[70,0,74,0],[67,0,70,74],[69,0,73,0]]
+};
+function mProva(s, t, d){
+  const bar = (s >> 4) & 3, k = s & 15;
+  if(k % 8 === 0) nota(T_PROVA.baixo[bar], t, d*7, "triangle", .1);
+  if(k === 4 || k === 12) nota(T_PROVA.baixo[bar] + 7, t, d*3, "triangle", .06);
+  if(k % 2 === 0) nota(T_PROVA.acorde[bar][(k >> 1) % 3] + 12, t, d*1.6, "sine", .035);
+  if(k % 4 === 0){
+    const n = T_PROVA.mel[bar][k >> 2]; if(n) nota(n, t, d*3.6, "square", .016);
+    chiado(t, .03, 4500, .035);                       // tique-taque do relógio
+  }
+}
+
+const T_CHEFE = {
+  baixo:[40,41,40,46],
+  riff:[[76,0,76,77,76,0,71,0],[77,0,77,79,77,0,72,0],[76,0,76,77,76,71,67,71],[74,0,74,77,74,0,70,0]]
+};
+function mChefe(s, t, d){
+  const bar = (s >> 4) & 3, k = s & 15;
+  nota(T_CHEFE.baixo[bar], t, d*.9, "square", k % 4 === 0 ? .075 : .045);
+  if(k % 2 === 0){ const n = T_CHEFE.riff[bar][k >> 1]; if(n) nota(n, t, d*1.9, "sawtooth", .022); }
+  if(k % 4 === 0) bumbo(t);
+  if(k === 4 || k === 12) caixa(t);
+  if(k % 2 === 1) chimbal(t);
+}
+
+const FAIXAS = {
+  combate:{ bpm:132, passo:mCombate },
+  chuva:  { bpm:148, passo:mCombate, tr:-5 },
+  prova:  { bpm:100, passo:mProva },
+  chefe:  { bpm:156, passo:mChefe }
+};
+
+/* Agendador: toca os passos com ~150 ms de antecedência, no relógio do áudio,
+   então o ritmo não oscila mesmo se o jogo perder quadros. */
+const musica = {
+  faixa:null, s:0, prox:0, id:0, mult:1,
+  tocar(nome){
+    if(this.faixa === nome || !FAIXAS[nome]) return;
+    this.parar();
+    try{
+      const a = audio();
+      this.faixa = nome; this.s = 0; this.prox = a.currentTime + .08;
+      this.id = setInterval(() => this.agendar(), 30);
+    }catch(e){ this.faixa = null; }
+  },
+  parar(){ clearInterval(this.id); this.id = 0; this.faixa = null; },
+  agendar(){
+    if(!this.faixa || !ac) return;
+    const f = FAIXAS[this.faixa];
+    if(this.prox < ac.currentTime) this.prox = ac.currentTime + .05;
+    while(this.prox < ac.currentTime + .15){
+      const d = 60/(f.bpm*this.mult)/4;
+      f.passo(this.s, this.prox, d, f);
+      this.s++; this.prox += d;
+    }
+  }
+};
+function jingleFim(){
+  [392, 349, 330, 262].forEach((f, i) => setTimeout(() => bip(f, .3, "square", .05), i*240));
+}
+document.addEventListener("visibilitychange", () => {
+  if(document.hidden) audioPausa(true);
+  else if(estado !== "pausa") audioPausa(false);
+});
 
 function baralhar(a){
   const b = a.slice();
@@ -346,7 +531,8 @@ function iniciar(){
     tiros:[], balas:[], frota:[], mergulho:[], part:[], disco:null,
     dir:1, tremor:0, aura:null, fase:"intro", t:0, aviso:"", avisoT:0,
     sofreu:false, filaQuiz:montarFila(), quiz:null, pausado:"jogo",
-    escudo:false, triplo:0, rapido:0, premios:0
+    escudo:false, triplo:0, rapido:0, perf:0, dobro:0, bombas:0, premios:0,
+    especial:null, boss:null, chuva:null, meteoros:[]
   };
   estado = "jogo";
   fecharCamadas();
@@ -358,9 +544,18 @@ function novaOnda(){
   g.onda++;
   g.fase = "intro"; g.t = 90; g.sofreu = false;
   g.tiros = []; g.balas = []; g.mergulho = []; g.disco = null;
+  g.boss = null; g.chuva = null; g.meteoros = [];
   g.nave.x = W/2 - 24;
   if(g.triplo > 0) g.triplo--;
   if(g.rapido > 0) g.rapido--;
+  if(g.perf > 0) g.perf--;
+  if(g.dobro > 0) g.dobro--;
+
+  /* A cada ESPECIAL_A_CADA ondas: chefe e chuva de meteoros se alternam */
+  g.especial = (g.onda % ESPECIAL_A_CADA === 0)
+    ? ((g.onda/ESPECIAL_A_CADA) % 2 === 1 ? "chefe" : "chuva") : null;
+  if(g.especial){ iniciarEspecial(); return; }
+  musica.tocar("combate"); musica.mult = 1 + Math.min(g.onda, 15)*.012;
 
   const linhas = Math.min(3 + Math.floor(g.onda/3), 5);
   const colunas = 8, espX = 72, espY = 42;
@@ -390,19 +585,25 @@ function faixa(tag, texto, bonus = false){
 }
 function hud(){
   el("hScore").textContent = g.pontos.toLocaleString("pt-BR");
-  el("hMult").textContent = "x" + g.multi;
+  el("hMult").textContent = "x" + mult();
   el("hWave").textContent = g.onda;
   el("hLives").textContent = "▲".repeat(Math.max(0, g.vidas)) || "—";
   const b = [];
   if(g.escudo) b.push("escudo");
   if(g.triplo > 0) b.push("triplo " + g.triplo);
   if(g.rapido > 0) b.push("rápido " + g.rapido);
+  if(g.perf > 0) b.push("perfura " + g.perf);
+  if(g.dobro > 0) b.push("pontos x2");
+  if(g.bombas > 0) b.push("bomba " + g.bombas + " [B]");
   el("hBuff").textContent = b.length ? b.join(" · ") : "—";
 }
 function aviso(txt){ g.aviso = txt; g.avisoT = 120; }
 
+/* multiplicador efetivo: o da sequência de abates, dobrado pelo reforço */
+function mult(){ return g.multi * (g.dobro > 0 ? 2 : 1); }
+
 function marcar(pts){
-  g.pontos += pts * g.multi;
+  g.pontos += pts * mult();
   g.sequencia++;
   if(g.sequencia % 10 === 0 && g.multi < 8){
     g.multi++;
@@ -450,6 +651,7 @@ function abrirBonus(){
     }))
   };
   estado = "bonus";
+  musica.tocar("prova"); musica.mult = 1;
   g.tiros = [];
   el("strip").classList.add("timing");
   faixa("BÔNUS", p.q, true);
@@ -461,6 +663,10 @@ const PREMIOS = [
   { nome:"ESCUDO", aplicar:s => { s.escudo = true; } },
   { nome:"TIRO TRIPLO POR 2 ONDAS", aplicar:s => { s.triplo = 3; } },
   { nome:"CADÊNCIA RÁPIDA POR 2 ONDAS", aplicar:s => { s.rapido = 3; } },
+  { nome:"NAVE EXTRA", aplicar:s => { s.vidas = Math.min(5, s.vidas + 1); } },
+  { nome:"TIRO PERFURANTE POR 2 ONDAS", aplicar:s => { s.perf = 3; } },
+  { nome:"BOMBA · TECLA B", aplicar:s => { s.bombas = Math.min(2, s.bombas + 1); } },
+  { nome:"PONTOS EM DOBRO POR 1 ONDA", aplicar:s => { s.dobro = 2; } },
   { nome:"NAVE EXTRA", aplicar:s => { s.vidas = Math.min(5, s.vidas + 1); } }
 ];
 
@@ -488,6 +694,7 @@ function fecharBonus(ok){
 
 async function fim(){
   estado = "fim";
+  musica.parar(); jingleFim();
   const prec = g.disparos ? Math.round(g.acertos/g.disparos*100) : 0;
   el("nScore").textContent = g.pontos.toLocaleString("pt-BR");
   el("nWave").textContent = g.onda;
@@ -572,21 +779,64 @@ function moverNave(){
 function atirar(){
   if(!g || g.nave.morto > 0) return;
   if(estado !== "jogo" && estado !== "bonus") return;
-  if(estado === "jogo" && g.fase === "intro") return;
+  if(estado === "jogo" && (g.fase === "intro" || g.fase === "vitoria")) return;
   const teto = g.rapido > 0 ? 7 : 4;
   if(g.nave.cd > 0 || g.tiros.length >= teto) return;
   const cx = g.nave.x + g.nave.w/2 - 2;
+  const perf = g.perf > 0;
   if(g.triplo > 0){
-    g.tiros.push({ x:cx, y:g.nave.y - 10, vx:0 });
-    g.tiros.push({ x:cx, y:g.nave.y - 4, vx:-2.4 });
-    g.tiros.push({ x:cx, y:g.nave.y - 4, vx:2.4 });
+    g.tiros.push({ x:cx, y:g.nave.y - 10, vx:0, perf });
+    g.tiros.push({ x:cx, y:g.nave.y - 4, vx:-2.4, perf });
+    g.tiros.push({ x:cx, y:g.nave.y - 4, vx:2.4, perf });
     g.disparos += 3;
   } else {
-    g.tiros.push({ x:cx, y:g.nave.y - 10, vx:0 });
+    g.tiros.push({ x:cx, y:g.nave.y - 10, vx:0, perf });
     g.disparos++;
   }
   g.nave.cd = g.rapido > 0 ? 6 : 11;
   bip(900, .04, "square", .03);
+}
+
+/* Registra o acerto de um tiro. Devolve true se o tiro deve sumir; o tiro
+   perfurante atravessa e lembra quem já acertou, para não bater duas vezes
+   no mesmo alvo nem contar mais de um acerto na precisão. */
+function acertou(b, alvo){
+  if(!b.hit) g.acertos++;
+  if(!b.perf) return true;
+  (b.hit = b.hit || new Set()).add(alvo);
+  return false;
+}
+
+/* Bomba: limpa os tiros inimigos e os mergulhadores, e causa 1 de dano em toda
+   a formação. Não zera a onda sozinha e não conta na sequência de abates. */
+function bomba(){
+  if(!g || estado !== "jogo" || g.fase !== "combate" || g.bombas <= 0 || g.nave.morto > 0) return;
+  g.bombas--;
+  g.balas = [];
+  g.frota.forEach(f=>{
+    if(!f.vivo) return;
+    if(--f.hp <= 0){
+      f.vivo = false;
+      explodir(f.x + f.w/2, f.y + f.h/2, TIPOS[f.tipo].cor, 14);
+      g.pontos += TIPOS[f.tipo].pontos*mult();
+    } else explodir(f.x + f.w/2, f.y + f.h/2, "#ffffff", 8);
+  });
+  g.mergulho.forEach(m=>{
+    if(m.y > H) return;
+    explodir(m.x + m.w/2, m.y + m.h/2, TIPOS[m.tipo].cor, 14);
+    g.pontos += TIPOS[m.tipo].pontos*3*mult();
+    m.y = H + 100;
+  });
+  if(g.boss){
+    g.boss.hp = Math.max(1, g.boss.hp - Math.ceil(g.boss.hpMax*.2));
+    g.boss.flash = 10;
+  }
+  g.meteoros.forEach(m => { explodir(m.x, m.y, "#ffc247", 12); g.pontos += 20*mult(); });
+  g.meteoros = [];
+  g.tremor = 26; g.aura = { c:"rgba(255,255,255,.35)", t:16 };
+  aviso("BOMBA!");
+  bip(70, .55, "sawtooth", .08);
+  hud();
 }
 
 function passo(){
@@ -604,9 +854,14 @@ function passo(){
   }
 
   if(estado === "bonus"){ moverNave(); passoBonus(); return; }
-  if(g.fase === "intro"){ if(--g.t <= 0) g.fase = "combate"; moverNave(); return; }
+  if(g.fase === "intro"){
+    if(g.boss) g.boss.y += (g.boss.yAlvo - g.boss.y)*.07;
+    if(--g.t <= 0){ g.fase = "combate"; if(g.boss) g.boss.y = g.boss.yAlvo; }
+    moverNave(); return;
+  }
 
   moverNave();
+  if(g.especial){ passoEspecial(); return; }
 
   const vivos = g.frota.filter(f => f.vivo);
   const prog = 1 - vivos.length / g.frota.length;
@@ -665,9 +920,9 @@ function passo(){
 
     if(g.disco && b.x > g.disco.x && b.x < g.disco.x + g.disco.w && b.y < g.disco.y + g.disco.h && b.y > g.disco.y){
       const v = 200 + Math.floor(Math.random()*7)*100;
-      g.pontos += v*g.multi; g.acertos++;
+      g.pontos += v*mult(); g.acertos++;
       explodir(g.disco.x + 21, g.disco.y + 9, "#ffc247", 34);
-      aviso("DISCO +" + (v*g.multi).toLocaleString("pt-BR"));
+      aviso("DISCO +" + (v*mult()).toLocaleString("pt-BR"));
       bip(1500, .12, "square", .05);
       g.disco = null; g.tiros.splice(i,1); hud();
       continue;
@@ -676,20 +931,24 @@ function passo(){
     let sumiu = false;
     for(const m of g.mergulho){
       if(m.y > H) continue;
+      if(b.hit && b.hit.has(m)) continue;
       if(b.x > m.x && b.x < m.x + m.w && b.y < m.y + m.h && b.y > m.y){
         explodir(m.x + m.w/2, m.y + m.h/2, TIPOS[m.tipo].cor);
-        m.y = H + 100; g.acertos++;
+        m.y = H + 100;
+        const some = acertou(b, m);
         marcar(TIPOS[m.tipo].pontos*3);
         bip(700, .07, "square", .04);
-        g.tiros.splice(i,1); sumiu = true; break;
+        if(some){ g.tiros.splice(i,1); sumiu = true; break; }
       }
     }
     if(sumiu) continue;
 
     for(const f of g.frota){
       if(!f.vivo) continue;
+      if(b.hit && b.hit.has(f)) continue;
       if(b.x > f.x && b.x < f.x + f.w && b.y < f.y + f.h && b.y > f.y){
-        g.tiros.splice(i,1); g.acertos++;
+        const some = acertou(b, f);
+        if(some) g.tiros.splice(i,1);
         if(--f.hp <= 0){
           f.vivo = false;
           explodir(f.x + f.w/2, f.y + f.h/2, TIPOS[f.tipo].cor);
@@ -699,20 +958,12 @@ function passo(){
           explodir(f.x + f.w/2, f.y + f.h/2, "#ffffff", 6);
           bip(340, .05, "square", .03);
         }
-        break;
+        if(some) break;
       }
     }
   }
 
-  for(let i = g.balas.length - 1; i >= 0; i--){
-    const b = g.balas[i];
-    b.y += b.vy;
-    if(b.y > H + 10){ g.balas.splice(i,1); continue; }
-    const n = g.nave;
-    if(b.x > n.x - 2 && b.x < n.x + n.w + 2 && b.y > n.y && b.y < n.y + n.h){
-      g.balas.splice(i,1); levarDano();
-    }
-  }
+  moverBalas();
 
   g.mergulho.forEach(m=>{
     const n = g.nave;
@@ -721,15 +972,197 @@ function passo(){
     }
   });
 
-  if(g.frota.every(f => !f.vivo) && g.mergulho.length === 0 && g.nave.morto === 0){
-    const limpa = 200*g.onda;
-    const perfeita = g.sofreu ? 0 : 1000;
-    g.pontos += (limpa + perfeita)*g.multi;
-    aviso(perfeita
-      ? "ONDA PERFEITA +" + ((limpa+perfeita)*g.multi).toLocaleString("pt-BR")
-      : "ONDA LIMPA +" + (limpa*g.multi).toLocaleString("pt-BR"));
-    hud();
-    abrirBonus();
+  if(g.frota.every(f => !f.vivo) && g.mergulho.length === 0 && g.nave.morto === 0)
+    concluirOnda(200*g.onda);
+}
+
+function concluirOnda(limpa){
+  el("strip").classList.remove("timing");
+  const perfeita = g.sofreu ? 0 : 1000;
+  const total = (limpa + perfeita)*mult();
+  g.pontos += total;
+  aviso((perfeita ? "ONDA PERFEITA +" : "ONDA LIMPA +") + total.toLocaleString("pt-BR"));
+  hud();
+  abrirBonus();
+}
+
+function moverBalas(){
+  for(let i = g.balas.length - 1; i >= 0; i--){
+    const b = g.balas[i];
+    b.y += b.vy; b.x += b.vx || 0;
+    if(b.y > H + 10 || b.x < -20 || b.x > W + 20){ g.balas.splice(i,1); continue; }
+    const n = g.nave;
+    if(b.x > n.x - 2 && b.x < n.x + n.w + 2 && b.y > n.y && b.y < n.y + n.h){
+      g.balas.splice(i,1); levarDano();
+    }
+  }
+}
+
+/* =====================================================================
+   FASES ESPECIAIS (a cada ESPECIAL_A_CADA ondas)
+   ===================================================================== */
+function iniciarEspecial(){
+  g.frota = []; g.dir = 1;
+  el("strip").classList.remove("timing");
+  if(g.especial === "chefe"){
+    const n = Math.round((g.onda/ESPECIAL_A_CADA + 1)/2);      // 1º, 2º, 3º chefe...
+    const hp = 40 + 20*(n - 1);
+    g.boss = { x:W/2 - 60, y:-70, yAlvo:34, w:SPR_CHEFE[0].length*5, h:SPR_CHEFE.length*5,
+               hp, hpMax:hp, n, t:0, flash:0, cd:90, dir:1, ciclo:0 };
+    faixa("CHEFE", "A nave-mãe chegou! Ela fica mais rápida e agressiva conforme perde energia.");
+    musica.tocar("chefe"); musica.mult = 1;
+    bip(110, .7, "sawtooth", .07);
+  } else {
+    g.chuva = { t:25*60, max:25*60, cd:40 };
+    faixa("CHUVA", "Sobreviva 25 segundos! Destrua o que puder: os meteoros dourados valem 300.");
+    el("strip").classList.add("timing");                       // a barra mostra o tempo restante
+    el("stripBar").style.width = "100%";
+    musica.tocar("chuva"); musica.mult = 1;
+    bip(200, .5, "triangle", .06);
+  }
+  hud();
+}
+
+function passoEspecial(){
+  if(g.fase === "vitoria"){
+    if(--g.t <= 0) concluirOnda(g.especial === "chuva" ? 500*g.onda : 200*g.onda);
+    return;
+  }
+  if(g.boss) passoChefe(); else passoChuva();
+}
+
+function passoChefe(){
+  const b = g.boss;
+  const frac = b.hp/b.hpMax;
+  const fase = frac > .66 ? 1 : frac > .33 ? 2 : 3;
+  b.t++; if(b.flash > 0) b.flash--;
+  const vel = 1.5 + fase*.8 + b.n*.25;
+  b.x += vel*b.dir;
+  if(b.x < 10){ b.x = 10; b.dir = 1; }
+  if(b.x + b.w > W - 10){ b.x = W - 10 - b.w; b.dir = -1; }
+  if(--b.cd <= 0) ataqueChefe(b, fase);
+  musica.mult = 1 + (fase - 1)*.08;
+
+  for(let i = g.tiros.length - 1; i >= 0; i--){
+    const t = g.tiros[i];
+    t.y -= 10.5; t.x += t.vx || 0;
+    if(t.y < -16 || t.x < -10 || t.x > W + 10){ g.tiros.splice(i,1); continue; }
+    if(t.hit && t.hit.has(b)) continue;
+    if(t.x > b.x && t.x < b.x + b.w && t.y < b.y + b.h && t.y > b.y){
+      if(acertou(t, b)) g.tiros.splice(i,1);
+      b.hp--; b.flash = 3;
+      g.pontos += 15*mult();
+      explodir(t.x, t.y, "#ffffff", 4);
+      bip(240, .04, "square", .03);
+      hud();
+      if(b.hp <= 0){ derrotarChefe(b); return; }
+    }
+  }
+  moverBalas();
+}
+
+function ataqueChefe(b, fase){
+  const cx = b.x + b.w/2, cy = b.y + b.h - 6;
+  const mira = Math.atan2(g.nave.x + g.nave.w/2 - cx, g.nave.y - cy);   // ângulo a partir da vertical
+  const leque = (n, abertura, vel, centro = 0) => {
+    for(let i = 0; i < n; i++){
+      const a = centro + (i - (n - 1)/2)*abertura;
+      g.balas.push({ x:cx - 2, y:cy, vx:Math.sin(a)*vel, vy:Math.cos(a)*vel });
+    }
+  };
+  const extra = b.n*.15;
+  b.ciclo++;
+  if(fase === 1){ leque(3, .3, 3.4 + extra); b.cd = 95; }
+  else if(fase === 2){
+    if(b.ciclo % 2) leque(5, .25, 3.7 + extra); else leque(3, .14, 4.4 + extra, mira);
+    b.cd = 72;
+  } else {
+    if(b.ciclo % 2) leque(7, .22, 3.9 + extra); else leque(3, .12, 5 + extra, mira);
+    b.cd = 52;
+  }
+  bip(180, .12, "sawtooth", .04);
+}
+
+function derrotarChefe(b){
+  const bonus = 1000*g.onda*mult();
+  g.pontos += bonus;
+  for(let k = 0; k < 6; k++)
+    explodir(b.x + Math.random()*b.w, b.y + Math.random()*b.h, k % 2 ? "#ff43b0" : "#ffc247", 24);
+  g.tremor = 32; g.aura = { c:"rgba(255,194,71,.25)", t:26 };
+  g.bombas = Math.min(2, g.bombas + 1);
+  g.boss = null; g.balas = []; g.tiros = [];
+  g.fase = "vitoria"; g.t = 110;
+  aviso("CHEFE DERROTADO +" + bonus.toLocaleString("pt-BR") + " · +1 BOMBA");
+  bip(880, .12, "square", .06);
+  setTimeout(() => bip(1320, .2, "square", .06), 120);
+  setTimeout(() => bip(1760, .3, "square", .06), 260);
+  hud();
+}
+
+function passoChuva(){
+  const c = g.chuva;
+  c.t--;
+  el("stripBar").style.width = Math.max(0, c.t/c.max*100) + "%";
+  const prog = 1 - c.t/c.max;
+
+  if(c.t > 90 && --c.cd <= 0){
+    c.cd = Math.max(12, 36 - g.onda*.6 - prog*14);
+    const ouro = Math.random() < .08;
+    const grande = !ouro && Math.random() < .35;
+    const r = ouro ? 15 : grande ? 30 : 16 + Math.random()*6;
+    g.meteoros.push({
+      x:r + 10 + Math.random()*(W - 2*r - 20), y:-r,
+      vx:(Math.random() - .5)*1.6, vy:2.2 + Math.random()*1.4 + g.onda*.05 + prog*1.2,
+      r, hp:grande ? 3 : 1, hpMax:grande ? 3 : 1, ouro,
+      giro:Math.random()*6, vg:(Math.random() - .5)*.08, flash:0
+    });
+  }
+
+  const n = g.nave;
+  for(let i = g.meteoros.length - 1; i >= 0; i--){
+    const m = g.meteoros[i];
+    m.x += m.vx; m.y += m.vy; m.giro += m.vg; if(m.flash > 0) m.flash--;
+    if(m.x < m.r || m.x > W - m.r) m.vx *= -1;
+    if(m.y > H + m.r + 10){ g.meteoros.splice(i,1); continue; }
+    const px = Math.max(n.x, Math.min(m.x, n.x + n.w)), py = Math.max(n.y, Math.min(m.y, n.y + n.h));
+    if(Math.hypot(m.x - px, m.y - py) < m.r*.85){
+      explodir(m.x, m.y, "#ffc247", 20);
+      g.meteoros.splice(i,1);
+      levarDano();
+    }
+  }
+
+  for(let i = g.tiros.length - 1; i >= 0; i--){
+    const t = g.tiros[i];
+    t.y -= 10.5; t.x += t.vx || 0;
+    if(t.y < -16 || t.x < -10 || t.x > W + 10){ g.tiros.splice(i,1); continue; }
+    for(const m of g.meteoros.slice()){
+      if(t.hit && t.hit.has(m)) continue;
+      if(Math.hypot(t.x - m.x, t.y - m.y) < m.r + 2){
+        const some = acertou(t, m);
+        if(some) g.tiros.splice(i,1);
+        if(--m.hp <= 0){
+          explodir(m.x, m.y, m.ouro ? "#ffc247" : "#8a63e0", 22);
+          marcar(m.ouro ? 300 : (m.hpMax > 1 ? 60 : 30));
+          bip(m.ouro ? 1500 : 520, .08, "square", .04);
+          g.meteoros.splice(g.meteoros.indexOf(m), 1);
+        } else {
+          m.flash = 4;
+          explodir(t.x, t.y, "#ffffff", 5);
+          bip(300, .05, "square", .03);
+        }
+        if(some) break;
+      }
+    }
+  }
+
+  if(c.t <= 0){
+    g.meteoros.forEach(m => explodir(m.x, m.y, "#8a63e0", 10));
+    g.meteoros = []; g.tiros = [];
+    g.fase = "vitoria"; g.t = 50;
+    aviso("VOCÊ SOBREVIVEU À CHUVA");
+    bip(880, .12, "square", .05);
+    setTimeout(() => bip(1320, .18, "square", .05), 120);
   }
 }
 
@@ -737,6 +1170,7 @@ function passoBonus(){
   const q = g.quiz;
   if(!q) return;
   q.tempo--;
+  musica.mult = q.tempo < 300 ? 1.5 : 1;             // ritmo acelera nos últimos 5 s
   el("stripBar").style.width = Math.max(0, q.tempo/q.max*100) + "%";
   if(q.tempo <= 0 && !q.resolvido){ q.resolvido = true; fecharBonus(false); return; }
 
@@ -785,6 +1219,36 @@ function desenharNave(x, y, piscar){
   ctx.fillRect(x+20, y+26, 8, 4 + Math.random()*7);
 }
 
+function desenharChefe(b){
+  const cel = 5;
+  const cor = b.flash > 0 ? "#ffffff" : (b.hp/b.hpMax < .33 ? "#ff5a5a" : "#ff43b0");
+  sprite(SPR_CHEFE, b.x, b.y, cel, cor);
+  ctx.fillStyle = "#ffc247";                                   // olhos
+  ctx.fillRect(b.x + 6*cel, b.y + 4*cel, 2*cel, 2*cel);
+  ctx.fillRect(b.x + 16*cel, b.y + 4*cel, 2*cel, 2*cel);
+  const bw = 300, bx = (W - bw)/2, by = 8, f = Math.max(0, b.hp/b.hpMax);   // barra de vida
+  ctx.fillStyle = "rgba(20,8,50,.85)"; ctx.fillRect(bx - 3, by - 3, bw + 6, 14);
+  ctx.fillStyle = "#33176f"; ctx.fillRect(bx, by, bw, 8);
+  ctx.fillStyle = f > .33 ? "#b6ff3d" : "#ff43b0"; ctx.fillRect(bx, by, bw*f, 8);
+}
+
+function desenharMeteoro(m){
+  ctx.save(); ctx.translate(m.x, m.y);
+  ctx.fillStyle = m.flash > 0 ? "#ffffff" : (m.ouro ? "#8a5a00" : "#3a1a5a");
+  ctx.strokeStyle = m.ouro ? "#ffc247" : "#ff43b0"; ctx.lineWidth = 3;
+  ctx.beginPath();
+  for(let i = 0; i < 9; i++){
+    const a = i/9*Math.PI*2 + m.giro, rad = m.r*(i % 2 ? .8 : 1);
+    i ? ctx.lineTo(Math.cos(a)*rad, Math.sin(a)*rad) : ctx.moveTo(Math.cos(a)*rad, Math.sin(a)*rad);
+  }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  if(m.hpMax > 1){
+    ctx.fillStyle = "#f3ecff"; ctx.font = "10px 'Press Start 2P', monospace";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(m.hp, 0, 0);
+  }
+  ctx.restore();
+}
+
 function render(){
   ctx.clearRect(0,0,W,H);
   ctx.save();
@@ -831,14 +1295,18 @@ function render(){
       sprite(SPR[t.spr], f.x, f.y + alt, t.cel, t.cor);
       ctx.globalAlpha = 1;
     });
+    if(g.boss) desenharChefe(g.boss);
+    g.meteoros.forEach(desenharMeteoro);
     g.mergulho.forEach(m => sprite(SPR[TIPOS[m.tipo].spr], m.x, m.y, TIPOS[m.tipo].cel, "#ffc247"));
     if(g.disco) sprite(SPR.disco, g.disco.x, g.disco.y, 3, "#ff43b0");
     ctx.fillStyle = "#ff7ad0";
     g.balas.forEach(b => ctx.fillRect(b.x, b.y, 4, 12));
   }
 
-  ctx.fillStyle = "#ffc247";
-  g.tiros.forEach(b => ctx.fillRect(b.x, b.y, 4, 14));
+  g.tiros.forEach(b => {
+    ctx.fillStyle = b.perf ? "#3ff0ff" : "#ffc247";
+    ctx.fillRect(b.x, b.y, 4, b.perf ? 20 : 14);
+  });
 
   g.part.forEach(p=>{
     ctx.globalAlpha = Math.max(0, p.v/32);
@@ -859,6 +1327,10 @@ function render(){
     ctx.fillStyle = "#3ff0ff";
     ctx.font = "22px 'Press Start 2P', monospace";
     ctx.fillText("ONDA " + g.onda, W/2, H/2 - 20);
+    if(g.especial){
+      ctx.fillStyle = "#ff43b0"; ctx.font = "13px 'Press Start 2P', monospace";
+      ctx.fillText(g.especial === "chefe" ? "FASE ESPECIAL · CHEFE" : "FASE ESPECIAL · CHUVA DE METEOROS", W/2, H/2 + 14, W - 40);
+    }
   }
   if(g.avisoT > 0){
     ctx.globalAlpha = Math.min(1, g.avisoT/40);
@@ -894,11 +1366,15 @@ addEventListener("keydown", e=>{
   if(k === "arrowleft" || k === "a") teclas.esq = true;
   if(k === "arrowright" || k === "d") teclas.dir = true;
   if(k === " ") atirar();
+  if(k === "m" && !e.repeat) alternarSom();
+  if(k === "b" && !e.repeat) bomba();
   if(k === "p" || k === "escape"){
     if(estado === "jogo" || estado === "bonus"){
       g.pausado = estado; estado = "pausa"; el("lyPause").classList.add("on");
+      audioPausa(true);
     } else if(estado === "pausa"){
       estado = g.pausado; el("lyPause").classList.remove("on");
+      audioPausa(false);
     }
   }
 });
@@ -920,6 +1396,8 @@ segurar(el("btnL"), "esq");
 segurar(el("btnR"), "dir");
 el("btnF").addEventListener("touchstart", e => { e.preventDefault(); atirar(); }, {passive:false});
 el("btnF").addEventListener("mousedown", atirar);
+el("btnB").addEventListener("touchstart", e => { e.preventDefault(); bomba(); }, {passive:false});
+el("btnB").addEventListener("mousedown", bomba);
 cv.addEventListener("touchmove", e=>{
   e.preventDefault();
   if(!g || (estado !== "jogo" && estado !== "bonus")) return;
@@ -929,8 +1407,13 @@ cv.addEventListener("touchmove", e=>{
 }, {passive:false});
 
 el("btnStart").onclick = iniciar;
+el("btnMute").onclick = () => { alternarSom(); el("btnMute").blur(); };
+el("btnMute").addEventListener("mousedown", e => e.preventDefault());
+el("ver").textContent = "v" + VERSAO;
+el("espN").textContent = ESPECIAL_A_CADA;
+rotuloSom();
 el("btnRestart").onclick = iniciar;
-el("btnResume").onclick = () => { estado = g.pausado; el("lyPause").classList.remove("on"); };
+el("btnResume").onclick = () => { estado = g.pausado; el("lyPause").classList.remove("on"); audioPausa(false); };
 el("btnSave").onclick = gravarPlacar;
 el("btnSkip").onclick = () => { el("lyName").classList.remove("on"); mostrarRank(null); };
 el("btnSeeRank").onclick = () => mostrarRank(null);

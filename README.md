@@ -16,6 +16,8 @@ Baixe os dois arquivos, deixe-os **na mesma pasta** e abra o `orbita-do-saber.ht
 |---|---|---|
 | Mover a nave | `←` `→` ou `A` `D` | botões ◀ ▶ ou arrastar o dedo na tela |
 | Atirar | `espaço` | botão ATIRAR |
+| Bomba (quando houver uma guardada) | `B` | botão BOMBA |
+| Ligar ou desligar o som | `M` | botão ♪ SOM no topo |
 | Pausar | `P` ou `Esc` | — |
 
 ---
@@ -56,10 +58,29 @@ Acertar dá pontos e um reforço, num ciclo fixo que se repete:
 2. **Tiro triplo** — leque de três projéteis por duas ondas
 3. **Cadência rápida** — quase o dobro da taxa de disparo por duas ondas
 4. **Nave extra** — até o limite de cinco
+5. **Tiro perfurante** — os projéteis atravessam os inimigos em vez de parar no primeiro, por duas ondas
+6. **Bomba** — fica guardada (no máximo duas). Ao apertar `B`, limpa os tiros inimigos e os mergulhadores e causa 1 de dano em toda a formação. Não zera a onda sozinha
+7. **Pontos em dobro** — dobra o multiplicador por uma onda
+8. **Nave extra** — a segunda do ciclo, então ela aparece a cada quatro prêmios
 
-A ordem ser fixa é proposital: o aluno aprende a sequência e passa a calcular se vale arriscar um chute quando o próximo prêmio é a nave extra.
+O ciclo tem oito passos e a ordem ser fixa é proposital: o aluno aprende a sequência e passa a calcular se vale arriscar um chute quando o próximo prêmio é a nave extra.
 
 Errar **não custa vida**. Você só perde o reforço daquela rodada, e a resposta correta aparece na tela com a explicação. No fim da partida, todas as questões erradas são listadas com a justificativa — é o momento didático do jogo.
+
+### Fases especiais
+
+A cada **cinco ondas** (5, 10, 15...) o combate normal dá lugar a uma fase especial, e a prova de conhecimento continua vindo logo depois. Elas se alternam:
+
+| Onda | Fase | O que acontece |
+|---|---|---|
+| 5, 15, 25... | **Chefe** | Uma nave-mãe com barra de vida. Ela atira em leque e, conforme perde energia, fica mais rápida e passa a mirar em você (três estágios). O 1º chefe tem 40 de vida e cada chefe seguinte tem 20 a mais. Derrotá-lo vale 1.000 × onda × multiplicador e dá uma bomba |
+| 10, 20, 30... | **Chuva de meteoros** | Sem inimigos: sobreviva 25 segundos destruindo o que cair. Meteoros grandes aguentam 3 tiros, os dourados valem 300. Colidir custa uma vida como qualquer outro dano |
+
+Para mudar a frequência, edite a constante `ESPECIAL_A_CADA` no topo do script do jogo.
+
+### A trilha sonora
+
+Música chiptune gerada em tempo real, com um tema para cada momento: combate, prova (o ritmo acelera nos últimos 5 segundos), chefe (fica mais intenso a cada estágio) e chuva de meteoros. O volume da trilha é a constante `VOL_MUSICA`, e a preferência de som é lembrada no navegador. Para trocar ou criar temas, veja a tabela `FAIXAS` e as funções `mCombate`, `mProva` e `mChefe`.
 
 ---
 
@@ -159,7 +180,7 @@ Nenhuma outra parte do jogo precisa ser alterada.
 - **Sem dependências.** Nenhuma biblioteca, nenhum build, nenhum `npm install`.
 - **Canvas 2D** para o jogo, HTML e CSS para os menus e o placar.
 - **Sprites em pixel art** desenhados por matrizes de texto no próprio código, sem arquivos de imagem.
-- **Áudio via Web Audio API**, gerado em tempo real — sem arquivos de som.
+- **Áudio via Web Audio API**, gerado em tempo real — efeitos e trilha sonora, sem arquivos de som.
 - **Fonte Press Start 2P** carregada do Google Fonts, com monoespaçada do sistema como reserva caso não haja internet.
 - **Responsivo**, com controles de toque que aparecem automaticamente em telas pequenas.
 
@@ -172,6 +193,24 @@ Nenhuma outra parte do jogo precisa ser alterada.
 **O conteúdo não domina o jogo.** A pergunta é uma parada de vinte segundos entre ondas, não o loop principal. Isso mantém a tensão de arcade e faz o acerto parecer recompensa, não obrigação.
 
 **Errar não pune.** Chutar custa apenas o prêmio, nunca uma vida. O objetivo é incentivar a tentativa e mostrar a explicação, não humilhar quem não sabe.
+
+---
+
+## Versões
+
+O projeto segue [versionamento semântico](https://semver.org/lang/pt-BR/) (`MAJOR.MINOR.PATCH`) e cada versão é marcada com uma tag no GitHub, na página de *Releases*. O número da versão atual aparece no canto do letreiro do jogo e fica na constante `VERSAO`.
+
+| Versão | O que mudou |
+|---|---|
+| v1.0.0 | Primeira versão jogável: combate, provas com 250 questões, reforços e ranking |
+| v1.1.0 | Trilha sonora chiptune, três novos reforços (tiro perfurante, bomba, pontos em dobro) e fases especiais a cada cinco ondas (chefe e chuva de meteoros) |
+
+Para lançar uma versão nova: atualize `VERSAO` no jogo e a tabela acima, faça o commit e crie a tag.
+
+```
+git tag -a v1.2.0 -m "v1.2.0 - descrição curta"
+git push origin v1.2.0
+```
 
 ---
 
