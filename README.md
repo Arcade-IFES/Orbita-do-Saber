@@ -8,7 +8,7 @@ O jogo entregue para a atividade está na raiz da pasta com estes arquivos:
 |---|---|
 | `index.html` | Jogo completo em uma única página |
 | `game.json` | Manifesto com os dados obrigatórios do jogo |
-| `questoes.json` | Banco com 20 questões sobre mulheres, alternativas, gabaritos, explicações e fontes |
+| `questoes.json` | Banco com 100 questões sobre mulheres, alternativas, gabaritos, explicações e fontes |
 | `capa.png` | Imagem de capa autoral do jogo |
 | `CREDITOS.md` | Declaração de autoria, pesquisa e créditos |
 
@@ -102,7 +102,7 @@ Música chiptune gerada em tempo real, com um tema para cada momento: combate, p
 
 ```
 index.html             → o jogo inteiro (motor, interface, ranking, trilha sonora)
-questoes.json          → o banco de 20 questões sobre mulheres
+questoes.json          → o banco de 100 questões sobre mulheres
 capa.png               → imagem de capa
 CREDITOS.md            → autoria e fontes
 game.json              → manifesto do jogo
@@ -115,11 +115,11 @@ A separação é intencional: um professor pode editar o banco sem nunca abrir o
 
 ## O banco de questões
 
-São **20 questões** sobre mulheres revolucionárias, cientistas, artistas, escritoras e lideranças:
+São **100 questões** sobre mulheres revolucionárias, cientistas, artistas, escritoras, atletas e lideranças:
 
 | Conteúdo | Questões |
 |---|---|
-| Mulheres e suas contribuições históricas, científicas, artísticas e sociais | 20 |
+| Mulheres e suas contribuições históricas, científicas, artísticas, esportivas e sociais | 100 |
 
 As questões são embaralhadas durante a partida e aparecem nos campos de asteroides.
 

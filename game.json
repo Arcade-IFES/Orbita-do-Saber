@@ -8,7 +8,7 @@
   "bancoQuestoes": "questoes.json",
   "capa": "capa.png",
   "creditos": "CREDITOS.md",
-  "totalQuestoes": 20,
+  "totalQuestoes": 100,
   "modo": "quiz offline",
   "versao": "1.0.0"
 }

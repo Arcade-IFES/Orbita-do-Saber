@@ -251,9 +251,10 @@ async function carregarBanco(){
       q:p.pergunta,
       a:p.alternativas,
       e:p.explicacao,
+      c:p.resposta,
       m:"mulheres"
     })) : [];
-    BANCO_OK = BANCO.length === 20 && BANCO.every(p => p.q && p.a?.length === 4 && p.e);
+    BANCO_OK = BANCO.length === 100 && BANCO.every(p => p.q && p.a?.length === 4 && Number.isInteger(p.c) && p.c >= 0 && p.c < p.a.length && p.e);
   }catch(e){
     BANCO = [];
     BANCO_OK = false;
@@ -671,14 +672,15 @@ function explodir(x, y, cor, n = 22){
 function abrirBonus(){
   const p = g.filaQuiz[g.quizTotal % g.filaQuiz.length];
   g.quizTotal++;
+  const certa = p.a[p.c];
   const ops = baralhar(p.a);
   g.quiz = {
-    p, ops, certa:p.a[0], tempo:20*60, max:20*60, resolvido:false,
+    p, ops, certa, tempo:20*60, max:20*60, resolvido:false,
     rochas: ops.map((txt, i) => ({
       x: 118 + i*((W-236)/3), y: 100 + Math.random()*50,
       vx:(Math.random() < .5 ? -1 : 1)*(.75 + Math.min(g.onda, 10)*.045),
       vy:(Math.random() < .5 ? -1 : 1)*(.35 + Math.min(g.onda, 10)*.03),
-      r:54, txt, certa:txt === p.a[0], vivo:true, giro:Math.random()*6
+      r:54, txt, certa:txt === certa, vivo:true, giro:Math.random()*6
     }))
   };
   estado = "bonus";
