@@ -11,7 +11,7 @@
 #   alterou=true    o arquivo do jogo foi modificado e precisa de commit
 set -euo pipefail
 
-ARQ="${ARQUIVO_JOGO:-orbita-do-saber.html}"
+ARQ="${ARQUIVO_JOGO:-index.html}"
 
 ultima="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)"
 ultima="${ultima#v}"

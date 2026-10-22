@@ -1,5 +1,19 @@
 # Órbita do Saber
 
+## Pacote obrigatório do jogo
+
+O jogo entregue para a atividade está na raiz da pasta com estes arquivos:
+
+| Arquivo | Finalidade |
+|---|---|
+| `index.html` | Jogo completo em uma única página |
+| `game.json` | Manifesto com os dados obrigatórios do jogo |
+| `questoes.json` | Banco com 20 questões sobre mulheres, alternativas, gabaritos, explicações e fontes |
+| `capa.png` | Imagem de capa autoral do jogo |
+| `CREDITOS.md` | Declaração de autoria, pesquisa e créditos |
+
+Abra `index.html` para jogar. Como o jogo carrega `questoes.json`, use um servidor local na pasta do projeto.
+
 Jogo arcade educativo em HTML, CSS e JavaScript puros, no estilo dos fliperamas dos anos 1980. O jogador pilota uma nave contra ondas de invasores e, a cada onda limpa, enfrenta um campo de asteroides com uma pergunta de conhecimentos gerais. Acertar rende pontos e um reforço de combate.
 
 O placar final entra em um ranking de dez posições com iniciais de três letras, como nas máquinas originais.
@@ -8,7 +22,7 @@ O placar final entra em um ranking de dez posições com iniciais de três letra
 
 ## Como jogar
 
-Baixe os dois arquivos, deixe-os **na mesma pasta** e abra o `orbita-do-saber.html` no navegador. Não precisa instalar nada, nem servidor, nem internet.
+Deixe os arquivos na mesma pasta e abra o `index.html` por um servidor local. O jogo não exige instalação nem internet.
 
 ### Controles
 
@@ -87,8 +101,11 @@ Música chiptune gerada em tempo real, com um tema para cada momento: combate, p
 ## Estrutura dos arquivos
 
 ```
-orbita-do-saber.html   → o jogo inteiro (motor, interface, ranking, trilha sonora)
-perguntas.js           → o banco de questões
+index.html             → o jogo inteiro (motor, interface, ranking, trilha sonora)
+questoes.json          → o banco de 20 questões sobre mulheres
+capa.png               → imagem de capa
+CREDITOS.md            → autoria e fontes
+game.json              → manifesto do jogo
 .github/               → workflow que cria a tag e o Release a cada push na main
 ```
 
@@ -98,28 +115,17 @@ A separação é intencional: um professor pode editar o banco sem nunca abrir o
 
 ## O banco de questões
 
-São **250 questões** escritas de acordo com os conteúdos da BNCC do ensino médio, distribuídas assim:
+São **20 questões** sobre mulheres revolucionárias, cientistas, artistas, escritoras e lideranças:
 
-| Área | Questões |
+| Conteúdo | Questões |
 |---|---|
-| Matemática | 30 |
-| Lógica e programação | 30 |
-| Física | 24 |
-| Português e literatura | 24 |
-| Química | 22 |
-| Biologia | 22 |
-| História | 20 |
-| Desenvolvimento web | 20 |
-| Geografia | 18 |
-| Dados, redes e sistemas | 16 |
-| Filosofia e sociologia | 12 |
-| Inglês | 12 |
+| Mulheres e suas contribuições históricas, científicas, artísticas e sociais | 20 |
 
-O sorteio é **equilibrado por matéria**: cada área é embaralhada separadamente e depois intercalada, então as primeiras doze perguntas de uma partida saem sempre de doze matérias diferentes. Nada de cair em cinco de matemática seguidas.
+As questões são embaralhadas durante a partida e aparecem nos campos de asteroides.
 
 ### Como adicionar questões
 
-Abra o `perguntas.js` e copie uma linha:
+Abra o `questoes.json` e copie um objeto mantendo os campos `pergunta`, `alternativas`, `resposta`, `explicacao` e `fonte`.
 
 ```js
 {
@@ -132,11 +138,11 @@ Abra o `perguntas.js` e copie uma linha:
 
 Três regras:
 
-1. **A primeira alternativa é sempre a resposta certa.** O jogo embaralha a ordem sozinho na hora de posicionar os asteroides.
+1. **O campo `resposta` indica o índice da alternativa correta**, começando em zero. O jogo embaralha a ordem na hora de posicionar os asteroides.
 2. **As alternativas precisam ser curtas**, no máximo uns 12 caracteres, porque são escritas dentro dos asteroides. O enunciado pode ser longo à vontade — ele aparece na faixa acima da tela.
-3. **O campo `m` pode ser qualquer texto.** Criar uma matéria nova é só usar um nome novo; o sorteio se ajusta automaticamente.
+3. **Toda questão deve manter uma explicação e uma fonte**, para que a atividade também seja material de estudo.
 
-Se o `perguntas.js` estiver faltando ou vazio, o jogo avisa na faixa e desabilita o botão de iniciar, em vez de travar no meio da partida sem explicação.
+Se o `questoes.json` estiver faltando, inválido ou incompleto, o jogo avisa na faixa e desabilita o botão de iniciar.
 
 ---
 
@@ -185,7 +191,7 @@ Como o bot commita na `main`, rode `git pull` antes do próximo push. Se a `main
 
 | Versão | O que mudou |
 |---|---|
-| v1.0.0 | Primeira versão jogável: combate, provas com 250 questões, reforços e ranking |
+| v1.0.0 | Primeira versão jogável: combate, provas com 20 questões sobre mulheres, reforços e ranking |
 | v1.1.0 | Trilha sonora chiptune, três novos reforços (tiro perfurante, bomba, pontos em dobro) e fases especiais a cada cinco ondas (chefe e chuva de meteoros) |
 | v1.1.1 em diante | Geradas pelo workflow; a lista completa está na página de Releases |
 

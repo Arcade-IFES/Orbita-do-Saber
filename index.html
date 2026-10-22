@@ -234,15 +234,46 @@
   </div>
 </div>
 
-<script src="perguntas.js" charset="utf-8"></script>
 <script>
 /* =====================================================================
    1. BANCO DE QUESTÕES
-   As perguntas ficam em perguntas.js, carregado logo acima deste script.
-   Para acrescentar conteúdo, edite APENAS aquele arquivo.
+   O banco externo questoes.json é carregado antes de liberar o jogo.
    ===================================================================== */
-const BANCO_OK = typeof PERGUNTAS !== "undefined" && Array.isArray(PERGUNTAS) && PERGUNTAS.length > 0;
-const BANCO = BANCO_OK ? PERGUNTAS : [];
+let BANCO = [];
+let BANCO_OK = false;
+
+async function carregarBanco(){
+  try{
+    const resposta = await fetch("questoes.json", {cache:"no-store"});
+    if(!resposta.ok) throw new Error("questoes.json não encontrado");
+    const dados = await resposta.json();
+    BANCO = Array.isArray(dados.questoes) ? dados.questoes.map(p => ({
+      q:p.pergunta,
+      a:p.alternativas,
+      e:p.explicacao,
+      m:"mulheres"
+    })) : [];
+    BANCO_OK = BANCO.length === 20 && BANCO.every(p => p.q && p.a?.length === 4 && p.e);
+  }catch(e){
+    BANCO = [];
+    BANCO_OK = false;
+  }
+  atualizarStatusBanco();
+}
+
+function atualizarStatusBanco(){
+  if(!BANCO_OK){
+    el("stripTag").textContent = "ERRO";
+    el("stripText").textContent = "Não foi possível carregar questoes.json — abra o jogo por um servidor local.";
+    el("btnStart").disabled = true;
+    el("btnStart").style.opacity = ".45";
+  }else{
+    el("stripTag").textContent = "PRONTO";
+    el("stripText").textContent = BANCO.length + " questões sobre mulheres carregadas. Insira uma ficha para começar.";
+    el("btnStart").disabled = false;
+    el("btnStart").style.opacity = "1";
+  }
+}
 
 /* Sorteio equilibrado: embaralha cada matéria e depois intercala, para não
    cair em cinco perguntas de matemática seguidas. */
@@ -1419,14 +1450,8 @@ el("btnSkip").onclick = () => { el("lyName").classList.remove("on"); mostrarRank
 el("btnSeeRank").onclick = () => mostrarRank(null);
 el("btnBackMenu").onclick = () => { fecharCamadas(); el("lyMenu").classList.add("on"); estado = "menu"; };
 
-if(!BANCO_OK){
-  el("stripTag").textContent = "ERRO";
-  el("stripText").textContent = "perguntas.js não encontrado — deixe o arquivo na mesma pasta do jogo.";
-  el("btnStart").disabled = true;
-  el("btnStart").style.opacity = ".45";
-} else {
-  el("stripText").textContent = BANCO.length + " questões carregadas. Insira uma ficha para começar.";
-}
+atualizarStatusBanco();
+carregarBanco();
 
 ranking.carregar().then(l=>{
   listaRank = l;

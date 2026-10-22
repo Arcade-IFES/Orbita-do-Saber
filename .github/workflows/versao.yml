@@ -37,7 +37,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add orbita-do-saber.html
+          git add index.html
           git commit -m "chore: versão ${{ steps.v.outputs.versao }} [skip ci]"
           git pull --rebase origin main
           git push origin HEAD:main
